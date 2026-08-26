@@ -1,0 +1,208 @@
+# ─── Reusable MinIO node template ────────────────────────────────────────────
+x-minio-node: &minio-node
+  image: minio/minio:RELEASE.2024-07-04T14-25-45Z
+  command: server --console-address ":9001" http://minio{1...4}/data
+  env_file: ../.env
+  environment:
+    MINIO_ROOT_USER:              ${MINIO_ROOT_USER:-storguard}
+    MINIO_ROOT_PASSWORD:          ${MINIO_ROOT_PASSWORD:-storguard_secret_123}
+    MINIO_SITE_NAME:              storguard-cluster
+    MINIO_PROMETHEUS_AUTH_TYPE:   public          # enables /minio/v2/metrics/* without auth
+  healthcheck:
+    test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+    interval: 5s
+    timeout: 5s
+    retries: 20
+    start_period: 15s
+  networks:
+    - storguard-net
+  restart: unless-stopped
+  profiles: [storage]
+
+services:
+
+  # ─── MinIO distributed cluster (4 nodes, erasure-coding quorum) ────────────
+  minio1:
+    <<: *minio-node
+    hostname: minio1
+    container_name: storguard-minio1
+    volumes:
+      - minio1-data:/data
+    ports:
+      - "9101:9001"   # console only on node 1
+
+  minio2:
+    <<: *minio-node
+    hostname: minio2
+    container_name: storguard-minio2
+    volumes:
+      - minio2-data:/data
+
+  minio3:
+    <<: *minio-node
+    hostname: minio3
+    container_name: storguard-minio3
+    volumes:
+      - minio3-data:/data
+
+  minio4:
+    <<: *minio-node
+    hostname: minio4
+    container_name: storguard-minio4
+    volumes:
+      - minio4-data:/data
+
+  # ─── S3 API load balancer + MinIO console proxy ───────────────────────────
+  minio-gateway:
+    image: nginx:1.27-alpine
+    container_name: storguard-gateway
+    hostname: minio-gateway
+    profiles: [storage]
+    depends_on:
+      minio1: { condition: service_healthy }
+      minio2: { condition: service_healthy }
+      minio3: { condition: service_healthy }
+      minio4: { condition: service_healthy }
+    ports:
+      - "9000:9000"   # S3 API  → tests connect here
+      - "9090:9090"   # MinIO console web UI
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    networks:
+      - storguard-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9000/minio/health/cluster"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── Prometheus metrics collector ────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: storguard-prometheus
+    profiles: [monitoring]
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=7d"
+      - "--web.enable-lifecycle"
+    ports:
+      - "9091:9090"     # http://localhost:9091
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    networks:
+      - storguard-net
+    restart: unless-stopped
+
+  # ─── Grafana dashboards ───────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: storguard-grafana
+    profiles: [monitoring]
+    ports:
+      - "3030:3000"     # http://localhost:3030  admin/storguard_grafana_123
+    environment:
+      GF_SECURITY_ADMIN_USER:     admin
+      GF_SECURITY_ADMIN_PASSWORD: storguard_grafana_123
+      GF_AUTH_ANONYMOUS_ENABLED:  "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /etc/grafana/provisioning/dashboards
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana-data:/var/lib/grafana
+    networks:
+      - storguard-net
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+
+  # ─── Jenkins CI server ────────────────────────────────────────────────────
+  jenkins:
+    image: jenkins/jenkins:lts-jdk17
+    container_name: storguard-jenkins
+    profiles: [ci]
+    privileged: true
+    user: root
+    ports:
+      - "8080:8080"
+      - "50000:50000"
+    volumes:
+      - jenkins-data:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock   # allows Jenkins to run Docker commands
+      - ./jenkins/plugins.txt:/usr/share/jenkins/ref/plugins.txt:ro
+    environment:
+      JENKINS_ADMIN_USER:     ${JENKINS_ADMIN_USER:-admin}
+      JENKINS_ADMIN_PASSWORD: ${JENKINS_ADMIN_PASSWORD:-storguard_jenkins_123}
+      JAVA_OPTS: >-
+        -Djenkins.install.runSetupWizard=false
+        -Dhudson.plugins.git.GitSCM.ALLOW_LOCAL_CHECKOUT=true
+    networks:
+      - storguard-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/login"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 90s
+
+  # ─── Allure reporting service ─────────────────────────────────────────────
+  allure:
+    image: frankescobar/allure-docker-service:2.27.0
+    container_name: storguard-allure
+    profiles: [ci]
+    ports:
+      - "5050:5050"   # REST API  (POST results, GET reports)
+    volumes:
+      - allure-results:/app/allure-results
+      - allure-reports:/app/default-reports
+    environment:
+      CHECK_RESULTS_EVERY_SECONDS: 3
+      KEEP_HISTORY: "20"
+      KEEP_HISTORY_LATEST: "20"
+    networks:
+      - storguard-net
+    restart: unless-stopped
+
+  allure-ui:
+    image: frankescobar/allure-docker-service-ui:7.0.3
+    container_name: storguard-allure-ui
+    profiles: [ci]
+    ports:
+      - "5252:5252"   # Web UI
+    environment:
+      ALLURE_DOCKER_PUBLIC_API_URL: "http://localhost:5050"
+      ALLURE_DOCKER_PUBLIC_API_URL_PREFIX: ""
+    networks:
+      - storguard-net
+    depends_on:
+      - allure
+    restart: unless-stopped
+
+# ─── Shared network ───────────────────────────────────────────────────────────
+networks:
+  storguard-net:
+    driver: bridge
+    name: storguard-net
+
+# ─── Persistent volumes ───────────────────────────────────────────────────────
+volumes:
+  minio1-data:
+    name: storguard-minio1-data
+  minio2-data:
+    name: storguard-minio2-data
+  minio3-data:
+    name: storguard-minio3-data
+  minio4-data:
+    name: storguard-minio4-data
+  jenkins-data:
+    name: storguard-jenkins-data
+  allure-results:
+    name: storguard-allure-results
+  allure-reports:
+    name: storguard-allure-reports
+  prometheus-data:
+    name: storguard-prometheus-data
+  grafana-data:
+    name: storguard-grafana-data

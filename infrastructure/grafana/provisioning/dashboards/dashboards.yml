@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: StorGuard
+    orgId: 1
+    folder: StorGuard
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /etc/grafana/provisioning/dashboards

@@ -1,0 +1,21 @@
+global:
+  scrape_interval:     15s
+  evaluation_interval: 15s
+
+scrape_configs:
+
+  - job_name: 'minio-cluster'
+    metrics_path: /minio/v2/metrics/cluster
+    scheme: http
+    static_configs:
+      - targets: ['minio-gateway:9000']
+        labels:
+          cluster: 'storguard'
+
+  - job_name: 'minio-node'
+    metrics_path: /minio/v2/metrics/node
+    scheme: http
+    static_configs:
+      - targets: ['minio1:9000', 'minio2:9000', 'minio3:9000', 'minio4:9000']
+        labels:
+          cluster: 'storguard'

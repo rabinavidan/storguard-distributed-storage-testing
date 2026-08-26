@@ -1,0 +1,12 @@
+allure-jenkins-plugin:latest
+pipeline-stage-view:latest
+blueocean:latest
+git:latest
+workflow-aggregator:latest
+credentials-binding:latest
+timestamper:latest
+ws-cleanup:latest
+junit:latest
+docker-workflow:latest
+parameterized-trigger:latest
+build-timeout:latest

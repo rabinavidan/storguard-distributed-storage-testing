@@ -1,0 +1,51 @@
+environment: local
+
+minio:
+  endpoint: "http://localhost:9000"
+  console: "http://localhost:9090"
+  region: us-east-1
+  nodes:
+    - name: minio1
+      api: "http://localhost:9000"
+      container: storguard-minio1
+    - name: minio2
+      api: "http://minio2:9000"
+      container: storguard-minio2
+    - name: minio3
+      api: "http://minio3:9000"
+      container: storguard-minio3
+    - name: minio4
+      api: "http://minio4:9000"
+      container: storguard-minio4
+
+cluster:
+  node_count: 4
+  volumes_per_node: 1
+  network: storguard-net
+
+thresholds:
+  maximum_error_rate_percent: 5
+  maximum_data_corruption_count: 0
+  maximum_recovery_time_seconds: 60
+  maximum_p95_latency_ms: 1000
+  maximum_performance_regression_percent: 20
+
+workload:
+  default_workers: 10
+  default_objects: 50
+  file_sizes_bytes:
+    - 0          # 0 bytes  — boundary behavior
+    - 1024       # 1 KB     — smoke validation
+    - 1048576    # 1 MB     — functional flow
+    - 104857600  # 100 MB   — large transfer
+
+chaos:
+  recovery_poll_interval_seconds: 2
+  recovery_deadline_seconds: 120
+  latency_ms: 200
+  packet_loss_percent: 30
+  disk_fill_percent: 95
+
+logging:
+  level: DEBUG
+  format: json

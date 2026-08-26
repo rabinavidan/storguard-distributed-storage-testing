@@ -1,0 +1,249 @@
+{
+  "__inputs": [
+    {
+      "name": "DS_PROMETHEUS",
+      "label": "Prometheus",
+      "type": "datasource",
+      "pluginId": "prometheus",
+      "pluginName": "Prometheus"
+    }
+  ],
+  "uid": "storguard-minio-v1",
+  "title": "StorGuard — MinIO Cluster",
+  "description": "Live metrics for the StorGuard 4-node distributed MinIO cluster",
+  "tags": ["storguard", "minio", "s3", "chaos"],
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "10s",
+  "time": { "from": "now-30m", "to": "now" },
+  "panels": [
+
+    {
+      "id": 1, "type": "stat", "title": "Cluster Health",
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [{ "expr": "minio_cluster_health_status", "legendFormat": "" }],
+      "options": {
+        "colorMode": "background", "graphMode": "none",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "DEGRADED", "color": "red" }, "1": { "text": "HEALTHY", "color": "green" } } }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }
+        }
+      }
+    },
+
+    {
+      "id": 2, "type": "stat", "title": "Nodes Online",
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [{ "expr": "minio_cluster_nodes_online_total", "legendFormat": "" }],
+      "options": { "colorMode": "background", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "yellow", "value": 3 }, { "color": "green", "value": 4 }] }
+        }
+      }
+    },
+
+    {
+      "id": 3, "type": "stat", "title": "Drives Online",
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [{ "expr": "minio_cluster_drive_online_total", "legendFormat": "" }],
+      "options": { "colorMode": "background", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "yellow", "value": 3 }, { "color": "green", "value": 4 }] }
+        }
+      }
+    },
+
+    {
+      "id": 4, "type": "stat", "title": "Total Objects",
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [{ "expr": "minio_cluster_usage_object_total", "legendFormat": "" }],
+      "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" } } }
+    },
+
+    {
+      "id": 5, "type": "stat", "title": "Total Buckets",
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [{ "expr": "minio_cluster_bucket_total", "legendFormat": "" }],
+      "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" } } }
+    },
+
+    {
+      "id": 6, "type": "stat", "title": "Usable Free Space",
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [{ "expr": "minio_cluster_capacity_usable_free_bytes", "legendFormat": "" }],
+      "options": { "colorMode": "background", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "yellow", "value": 1073741824 }, { "color": "green", "value": 5368709120 }] }
+        }
+      }
+    },
+
+    {
+      "id": 10, "type": "timeseries", "title": "S3 Request Rate (req/s)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "sum(rate(minio_s3_requests_total[1m]))", "legendFormat": "Total" },
+        { "expr": "sum(rate(minio_s3_requests_incoming_total[1m]))", "legendFormat": "Incoming" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps", "color": { "mode": "palette-classic" } } },
+      "options": { "tooltip": { "mode": "multi" } }
+    },
+
+    {
+      "id": 11, "type": "timeseries", "title": "S3 Error Rate (req/s)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "sum(rate(minio_s3_requests_errors_total[1m]))", "legendFormat": "All Errors" },
+        { "expr": "sum(rate(minio_s3_requests_4xx_errors_total[1m]))", "legendFormat": "4xx" },
+        { "expr": "sum(rate(minio_s3_requests_5xx_errors_total[1m]))", "legendFormat": "5xx" },
+        { "expr": "sum(rate(minio_s3_requests_rejected_auth_total[1m]))", "legendFormat": "Auth Rejected" }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "reqps", "color": { "mode": "palette-classic" } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Auth Rejected" }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "All Errors" }, "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }] }
+        ]
+      },
+      "options": { "tooltip": { "mode": "multi" } }
+    },
+
+    {
+      "id": 20, "type": "timeseries", "title": "Network Throughput — Received (bytes/s)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "sum(rate(minio_s3_traffic_received_bytes[1m]))", "legendFormat": "S3 Received" },
+        { "expr": "sum(rate(minio_inter_node_traffic_received_bytes[1m]))", "legendFormat": "Inter-node Received" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "Bps", "color": { "mode": "palette-classic" } } }
+    },
+
+    {
+      "id": 21, "type": "timeseries", "title": "Network Throughput — Sent (bytes/s)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "sum(rate(minio_s3_traffic_sent_bytes[1m]))", "legendFormat": "S3 Sent" },
+        { "expr": "sum(rate(minio_inter_node_traffic_sent_bytes[1m]))", "legendFormat": "Inter-node Sent" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "Bps", "color": { "mode": "palette-classic" } } }
+    },
+
+    {
+      "id": 30, "type": "timeseries", "title": "Memory Usage per Node (bytes)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 20 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "minio_node_process_resident_memory_bytes{job=\"minio-node\"}", "legendFormat": "{{instance}}" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "bytes", "color": { "mode": "palette-classic" } } }
+    },
+
+    {
+      "id": 31, "type": "timeseries", "title": "CPU Usage per Node (cores)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 20 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "rate(minio_node_process_cpu_total_seconds{job=\"minio-node\"}[1m])", "legendFormat": "{{instance}}" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "palette-classic" } } }
+    },
+
+    {
+      "id": 40, "type": "gauge", "title": "Disk Usage %",
+      "gridPos": { "h": 8, "w": 6, "x": 0, "y": 28 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "100 * (minio_cluster_usage_total_bytes / minio_cluster_capacity_usable_total_bytes)", "legendFormat": "Used %" }
+      ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "minVizWidth": 75, "minVizHeight": 75 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent", "min": 0, "max": 100,
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 70 }, { "color": "red", "value": 90 }] }
+        }
+      }
+    },
+
+    {
+      "id": 41, "type": "gauge", "title": "Erasure Set Write Quorum",
+      "gridPos": { "h": 8, "w": 6, "x": 6, "y": 28 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "minio_cluster_health_erasure_set_write_quorum", "legendFormat": "Write Quorum" }
+      ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short", "min": 0, "max": 4,
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "yellow", "value": 2 }, { "color": "green", "value": 3 }] }
+        }
+      }
+    },
+
+    {
+      "id": 42, "type": "timeseries", "title": "In-flight S3 Requests",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 28 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "sum(minio_s3_requests_inflight_total)", "legendFormat": "In-flight" },
+        { "expr": "sum(minio_s3_requests_waiting_total)", "legendFormat": "Waiting" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "palette-classic" } } }
+    },
+
+    {
+      "id": 50, "type": "timeseries", "title": "Node I/O — Read & Write (bytes/s)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 36 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "rate(minio_node_io_read_bytes{job=\"minio-node\"}[1m])", "legendFormat": "Read {{instance}}" },
+        { "expr": "rate(minio_node_io_write_bytes{job=\"minio-node\"}[1m])", "legendFormat": "Write {{instance}}" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "Bps", "color": { "mode": "palette-classic" } } }
+    },
+
+    {
+      "id": 51, "type": "timeseries", "title": "Scanner — Objects Scanned/s",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 36 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "expr": "rate(minio_node_scanner_objects_scanned{job=\"minio-node\"}[1m])", "legendFormat": "{{instance}}" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ops", "color": { "mode": "palette-classic" } } }
+    }
+  ],
+
+  "templating": {
+    "list": [
+      {
+        "name": "DS_PROMETHEUS",
+        "type": "datasource",
+        "pluginId": "prometheus",
+        "label": "Datasource",
+        "current": {}
+      }
+    ]
+  }
+}

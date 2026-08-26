@@ -1,0 +1,38 @@
+# Environment
+.env
+*.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+dist/
+build/
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
+
+# Test output
+allure-results/
+allure-report/
+.pytest_cache/
+test-results/
+htmlcov/
+.coverage
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# macOS
+.DS_Store
+
+# Logs and diagnostics
+*.log
+diagnostics/
+
+# Baselines (generated, not committed)
+baselines/*.json

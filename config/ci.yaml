@@ -1,0 +1,52 @@
+environment: ci
+
+minio:
+  # In CI, tests run inside Docker network — talk to nginx gateway directly
+  endpoint: "http://minio-gateway:9000"
+  console: "http://minio-gateway:9090"
+  region: us-east-1
+  nodes:
+    - name: minio1
+      api: "http://minio1:9000"
+      container: storguard-minio1
+    - name: minio2
+      api: "http://minio2:9000"
+      container: storguard-minio2
+    - name: minio3
+      api: "http://minio3:9000"
+      container: storguard-minio3
+    - name: minio4
+      api: "http://minio4:9000"
+      container: storguard-minio4
+
+cluster:
+  node_count: 4
+  volumes_per_node: 1
+  network: storguard-net
+
+thresholds:
+  maximum_error_rate_percent: 2
+  maximum_data_corruption_count: 0
+  maximum_recovery_time_seconds: 30
+  maximum_p95_latency_ms: 800
+  maximum_performance_regression_percent: 20
+
+workload:
+  default_workers: 20
+  default_objects: 500
+  file_sizes_bytes:
+    - 0
+    - 1024
+    - 1048576
+    - 104857600
+
+chaos:
+  recovery_poll_interval_seconds: 2
+  recovery_deadline_seconds: 60
+  latency_ms: 200
+  packet_loss_percent: 30
+  disk_fill_percent: 95
+
+logging:
+  level: INFO
+  format: json
