@@ -15,6 +15,7 @@ from storguard.clients.s3_client import S3Client, S3Config
 from storguard.chaos.controller import ChaosController
 from storguard.integrity.validator import IntegrityValidator
 from storguard.quality_gate.gate import GateThresholds, QualityGate
+from storguard.snapshot.service import SnapshotService
 
 
 # ─── Config ───────────────────────────────────────────────────────────────────
@@ -78,6 +79,11 @@ def integrity(s3: S3Client) -> IntegrityValidator:
 @pytest.fixture(scope="session")
 def gate() -> QualityGate:
     return QualityGate(GateThresholds())
+
+
+@pytest.fixture(scope="session")
+def snapshots(s3: S3Client) -> SnapshotService:
+    return SnapshotService(s3)
 
 
 # ─── Test-scoped bucket (parallel-safe, auto-cleaned) ────────────────────────
