@@ -24,7 +24,7 @@ This is a recruiter-facing portfolio project demonstrating end-to-end SDET skill
 ## Test Results — Live Cluster
 
 ```
-184 passed · 0 failed · 0 skipped   (~1m 15s)
+184 passed · 0 failed · 0 skipped   (1m 5s)
 ```
 
 | # | Layer | Tests | Marker | What it proves |
