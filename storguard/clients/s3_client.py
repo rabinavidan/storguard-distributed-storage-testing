@@ -120,7 +120,7 @@ class S3Client:
 
         download_object() is used for integrity/metrics tracking and discards the
         body after checksumming; this is for callers that need the actual content
-        back (e.g. reading a snapshot manifest).
+        back (e.g. reading a snapshot manifest or replicating to a secondary site).
         """
         try:
             response = self._client.get_object(Bucket=bucket, Key=key)

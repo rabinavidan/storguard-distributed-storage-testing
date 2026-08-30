@@ -27,6 +27,7 @@ def _env(key: str, default: str) -> str:
 S3_ENDPOINT = _env("MINIO_ENDPOINT", "http://localhost:9000")
 S3_ACCESS_KEY = _env("MINIO_ROOT_USER", "storguard")
 S3_SECRET_KEY = _env("MINIO_ROOT_PASSWORD", "storguard_secret_123")
+SECONDARY_S3_ENDPOINT = _env("MINIO_SECONDARY_ENDPOINT", "http://localhost:9200")
 
 _MINIO_CONTAINERS = [
     "storguard-minio1",
@@ -50,6 +51,20 @@ def s3_config() -> S3Config:
 @pytest.fixture(scope="session")
 def s3(s3_config: S3Config) -> S3Client:
     return S3Client(s3_config)
+
+
+@pytest.fixture(scope="session")
+def secondary_s3_config() -> S3Config:
+    return S3Config(
+        endpoint=SECONDARY_S3_ENDPOINT,
+        access_key=S3_ACCESS_KEY,
+        secret_key=S3_SECRET_KEY,
+    )
+
+
+@pytest.fixture(scope="session")
+def secondary_s3(secondary_s3_config: S3Config) -> S3Client:
+    return S3Client(secondary_s3_config)
 
 
 @pytest.fixture(scope="session")
@@ -99,6 +114,22 @@ def test_bucket(s3: S3Client) -> Generator[str, None, None]:
         s3.delete_bucket(bucket)
     except Exception:
         pass
+
+
+@pytest.fixture()
+def replication_bucket(s3: S3Client, secondary_s3: S3Client) -> Generator[str, None, None]:
+    """Same-named bucket provisioned on both the primary and secondary site."""
+    bucket = f"storguard-repl-{uuid.uuid4().hex[:8]}"
+    s3.create_bucket(bucket)
+    secondary_s3.create_bucket(bucket)
+    yield bucket
+    for client in (s3, secondary_s3):
+        try:
+            for key in client.list_objects(bucket):
+                client.delete_object(bucket, key)
+            client.delete_bucket(bucket)
+        except Exception:
+            pass
 
 
 # ─── Allure auto-attach on failure ───────────────────────────────────────────
