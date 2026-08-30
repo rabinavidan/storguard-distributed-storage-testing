@@ -10,7 +10,7 @@ Distributed storage systems must survive partial failures without losing data or
 
 > **Can a 4-node MinIO cluster preserve data integrity, maintain S3 availability, and deliver acceptable performance when nodes fail, the network degrades, and disks fill up?**
 
-The answer — proven across **184 automated tests in 10 layers** against a live cluster — is **yes**.
+The answer — proven across **190 automated tests in 11 layers** against a live cluster — is **yes**.
 
 This is a recruiter-facing portfolio project demonstrating end-to-end SDET skills:
 - Distributed systems understanding (erasure coding, quorum reads, network partitions)
@@ -24,7 +24,7 @@ This is a recruiter-facing portfolio project demonstrating end-to-end SDET skill
 ## Test Results — Live Cluster
 
 ```
-184 passed · 0 failed · 0 skipped   (1m 5s)
+190 passed · 0 failed · 0 skipped   (~1m 20s)
 ```
 
 | # | Layer | Tests | Marker | What it proves |
@@ -38,10 +38,11 @@ This is a recruiter-facing portfolio project demonstrating end-to-end SDET skill
 | L5 | **Resilience — Disk Pressure** | 3 | `resilience` | Disk fill → clean ENOSPC error → release → writes resume |
 | L6 | **Security** | 19 | `security` | Auth rejection, namespace isolation, path traversal, injection, boundaries |
 | L7 | **Race Conditions** | 63 | `race` | Seeded write/delete, overwrite/read, concurrent-write and node-restart/read races — every outcome classified allowed vs. forbidden, reproducible by seed |
-| L8 | **Replication & Failover** | 4 | `replication` | Primary → standalone secondary async replication; observable lag; failover read survives primary gateway outage; documented RPO window |
-| L9 | **AI — Unit** | 49 | `unit` | Log analyzer, report summarizer, chaos advisor — fully mocked, zero Ollama required |
-| L9 | **AI — Integration** | 12 | `ai` | Live gemma4:26b calls: log analysis, chaos advice, narrative generation |
-| | **TOTAL** | **184** | | **All suites passing against live 4-node cluster (excludes `ai` marker when Ollama isn't running)** |
+| L8 | **Snapshot Simulation** | 6 | `snapshot` | Point-in-time create/list/restore/delete via server-side S3 copy; restore re-verifies SHA-256, survives multi-snapshot coexistence and node restart |
+| L9 | **Replication & Failover** | 4 | `replication` | Primary → standalone secondary async replication; observable lag; failover read survives primary gateway outage; documented RPO window |
+| L10 | **AI — Unit** | 49 | `unit` | Log analyzer, report summarizer, chaos advisor — fully mocked, zero Ollama required |
+| L10 | **AI — Integration** | 12 | `ai` | Live gemma4:26b calls: log analysis, chaos advice, narrative generation |
+| | **TOTAL** | **190** | | **All suites passing against live 4-node cluster (excludes `ai` marker when Ollama isn't running)** |
 
 ---
 
@@ -54,8 +55,9 @@ This is a recruiter-facing portfolio project demonstrating end-to-end SDET skill
 ║  ┌──────────────────────────────────────────────────────────────────┐   ║
 ║  │                    Test Pyramid  (tests/)                         │   ║
 ║  │                                                                   │   ║
-║  │    L9 AI Integration ──── live LLM calls via Ollama               │   ║
-║  │    L8 Replication ──────── primary/secondary async + failover     │   ║
+║  │    L10 AI Integration ─── live LLM calls via Ollama               │   ║
+║  │    L9 Replication ──────── primary/secondary async + failover     │   ║
+║  │    L8 Snapshot ─────────── point-in-time create/restore/delete    │   ║
 ║  │    L7 Race Conditions ─── seeded timing collisions, by seed       │   ║
 ║  │    L6 Security ─────────── auth · isolation · boundary inputs     │   ║
 ║  │    L5 Resilience ──────── node loss · network · disk pressure     │   ║
@@ -261,7 +263,7 @@ StorGuard uses **Ollama** — a fully local LLM runtime. Zero cloud dependency. 
 When Ollama is offline, **every AI feature falls back automatically**:
 - Rule-based regex replaces LLM log analysis
 - Built-in defaults replace AI chaos recommendations
-- All 184 tests still pass — no test depends on Ollama unless it carries `@pytest.mark.ai`
+- All 190 tests still pass — no test depends on Ollama unless it carries `@pytest.mark.ai`
 
 ### Auto-Attach on Test Failure
 
@@ -391,6 +393,8 @@ Every stage that fails causes the pipeline to abort — except Stage 11, which a
 │   │   └── race_runner.py             Seeded two-operation race runner + outcome classification
 │   ├── integrity/
 │   │   └── validator.py               SHA-256 round-trip + test data generation
+│   ├── snapshot/
+│   │   └── service.py                 Point-in-time create/list/restore/delete via server-side copy
 │   ├── replication/
 │   │   └── worker.py                  Primary → secondary async copy, lag + failover support
 │   ├── workloads/
@@ -423,9 +427,11 @@ Every stage that fails causes the pipeline to abort — except Stage 11, which a
 │   │   └── test_security.py
 │   ├── race_conditions/               L7 — 63 seeded race tests
 │   │   └── test_race_conditions.py    write/delete · overwrite/read · concurrent-write · restart/read
-│   ├── replication/                   L8 — 4 replication/failover tests
+│   ├── snapshots/                     L8 — 6 snapshot lifecycle tests
+│   │   └── test_snapshot.py           create/restore roundtrip · coexistence · node-restart · delete · list
+│   ├── replication/                   L9 — 4 replication/failover tests
 │   │   └── test_replication.py        replicate · lag · failover read · documented RPO window
-│   └── ai/                            L9 — 61 AI tests (49 unit + 12 integration)
+│   └── ai/                            L10 — 61 AI tests (49 unit + 12 integration)
 │       ├── conftest.py                OllamaClientBuilder · MetricsBuilder · require_ollama
 │       ├── test_ollama_client.py      Config · connectivity · lifecycle
 │       ├── test_log_analyzer.py       Pattern detection (parametrized) · AI parse · fallback
@@ -464,7 +470,7 @@ Every stage that fails causes the pipeline to abort — except Stage 11, which a
 | SHA-256 stored in S3 metadata on upload | Server-side integrity check without re-downloading for comparison |
 | `restore_all()` in every fixture teardown | Cluster is always healthy after any test, pass or fail — no leaked faults |
 | Ollama over cloud LLMs | Zero cost, zero latency, no API keys, data never leaves the machine |
-| AI graceful fallback | All 184 tests pass whether Ollama is running or not — AI is additive, not required |
+| AI graceful fallback | All 190 tests pass whether Ollama is running or not — AI is additive, not required |
 | `from __future__ import annotations` everywhere | Python 3.9 compatibility — defers type hint evaluation |
 | `with allure.step(...)` in every test | Drillable Allure timeline — failure shows exact step, not just line number |
 | Conftest AI hook with 30s timeout | AI log analysis on failure never blocks the suite — fails fast and moves on |
@@ -486,7 +492,7 @@ curl -s http://localhost:9000/minio/health/cluster    # expect HTTP 200
 # 3. Install StorGuard
 pip install -e ".[dev]"
 
-# 4. Run all 184 tests
+# 4. Run all 190 tests
 python -m pytest tests/ -m "not ai" --tb=short
 
 # 5. Generate Allure report
@@ -500,8 +506,9 @@ python -m pytest -m functional                       # L3 — S3 CRUD
 python -m pytest -m resilience                       # L5 — chaos scenarios
 python -m pytest -m security                         # L6 — security suite
 python -m pytest -m race                             # L7 — seeded race conditions
-python -m pytest -m replication                      # L8 — primary/secondary + failover
-python -m pytest -m ai                               # L9 — requires Ollama + model
+python -m pytest -m snapshot                         # L8 — snapshot create/restore
+python -m pytest -m replication                      # L9 — primary/secondary + failover
+python -m pytest -m ai                               # L10 — requires Ollama + model
 
 # 7. AI features (Ollama running on localhost:11434)
 storguard ai status                                  # list installed models
@@ -555,6 +562,7 @@ docker compose --profile ci up -d                   # Jenkins + Allure
 | `integrity` | SHA-256 and size validation after transfer and recovery |
 | `resilience` | Node loss, network faults, disk pressure |
 | `race` | Seeded concurrent-timing collisions classified as allowed/forbidden |
+| `snapshot` | Point-in-time create/list/restore/delete via server-side S3 copy |
 | `replication` | Primary/secondary async replication, lag and failover reads |
 | `performance` | Concurrent throughput and latency percentiles |
 | `security` | Auth enforcement, permissions, input boundary validation |
