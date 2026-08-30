@@ -115,6 +115,19 @@ class S3Client:
         except ClientError as exc:
             return _s3_error(exc, start, bucket, key)
 
+    def download_bytes(self, bucket: str, key: str) -> Optional[bytes]:
+        """Return the raw object body, or None if it can't be read.
+
+        download_object() is used for integrity/metrics tracking and discards the
+        body after checksumming; this is for callers that need the actual content
+        back (e.g. replicating an object to a secondary site).
+        """
+        try:
+            response = self._client.get_object(Bucket=bucket, Key=key)
+            return response["Body"].read()
+        except ClientError:
+            return None
+
     def delete_object(self, bucket: str, key: str) -> OperationResult:
         start = time.monotonic()
         try:
