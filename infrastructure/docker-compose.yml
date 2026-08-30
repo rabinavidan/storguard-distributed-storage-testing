@@ -77,6 +77,37 @@ services:
       timeout: 5s
       retries: 5
 
+  # ─── Standalone secondary site — replication/failover target ─────────────
+  # Deliberately NOT part of the primary's erasure-coding set: this is an
+  # independent single-node MinIO instance that the Python ReplicationWorker
+  # copies into, so replication lag and failover reads can be exercised
+  # without proprietary storage hardware.
+  minio-secondary:
+    image: minio/minio:RELEASE.2024-07-04T14-25-45Z
+    container_name: storguard-minio-secondary
+    hostname: minio-secondary
+    command: server /data --console-address ":9001"
+    env_file: ../.env
+    environment:
+      MINIO_ROOT_USER:     ${MINIO_ROOT_USER:-storguard}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-storguard_secret_123}
+      MINIO_SITE_NAME:     storguard-secondary
+    profiles: [storage]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+    ports:
+      - "9200:9000"   # S3 API — secondary site
+      - "9201:9001"   # console
+    volumes:
+      - minio-secondary-data:/data
+    networks:
+      - storguard-net
+    restart: unless-stopped
+
   # ─── Prometheus metrics collector ────────────────────────────────────────
   prometheus:
     image: prom/prometheus:v2.53.0
@@ -196,6 +227,8 @@ volumes:
     name: storguard-minio3-data
   minio4-data:
     name: storguard-minio4-data
+  minio-secondary-data:
+    name: storguard-minio-secondary-data
   jenkins-data:
     name: storguard-jenkins-data
   allure-results:
