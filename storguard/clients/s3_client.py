@@ -115,6 +115,44 @@ class S3Client:
         except ClientError as exc:
             return _s3_error(exc, start, bucket, key)
 
+    def download_bytes(self, bucket: str, key: str) -> Optional[bytes]:
+        """Return the raw object body, or None if it can't be read.
+
+        download_object() is used for integrity/metrics tracking and discards the
+        body after checksumming; this is for callers that need the actual content
+        back (e.g. reading a snapshot manifest).
+        """
+        try:
+            response = self._client.get_object(Bucket=bucket, Key=key)
+            return response["Body"].read()
+        except ClientError:
+            return None
+
+    def copy_object(
+        self, source_bucket: str, source_key: str, dest_bucket: str, dest_key: str
+    ) -> OperationResult:
+        """Server-side copy — the SHA-256 stored in the source's metadata travels
+        with the copy (MetadataDirective defaults to COPY), so integrity can be
+        re-verified on the destination without re-uploading any bytes."""
+        start = time.monotonic()
+        try:
+            self._client.copy_object(
+                Bucket=dest_bucket,
+                Key=dest_key,
+                CopySource={"Bucket": source_bucket, "Key": source_key},
+            )
+            meta = self.get_object_metadata(dest_bucket, dest_key)
+            return OperationResult(
+                status=OperationStatus.SUCCESS,
+                duration_ms=_elapsed_ms(start),
+                bucket=dest_bucket,
+                key=dest_key,
+                size_bytes=meta["size"],
+                checksum_sha256=meta["metadata"].get("sha256"),
+            )
+        except ClientError as exc:
+            return _s3_error(exc, start, dest_bucket, dest_key)
+
     def delete_object(self, bucket: str, key: str) -> OperationResult:
         start = time.monotonic()
         try:
