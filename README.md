@@ -1,5 +1,7 @@
 # StorGuard
 
+[![CI](https://github.com/rabinavidan/storguard-distributed-storage-testing/actions/workflows/ci.yml/badge.svg)](https://github.com/rabinavidan/storguard-distributed-storage-testing/actions/workflows/ci.yml)
+
 > **A production-grade reliability, chaos and performance-testing platform for distributed object storage — built in Python, with AI-powered analysis, full Allure evidence and a Jenkins CI/CD pipeline.**
 
 ---
@@ -365,6 +367,35 @@ Every stage that fails causes the pipeline to abort — except Stage 11, which a
 
 ---
 
+## CI/CD — GitHub Actions (`.github/workflows/ci.yml`)
+
+Jenkins requires a self-hosted server to see it run; GitHub Actions runs on every push in the public repo itself — this is the one a recruiter can actually click on. Two jobs:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  Job: quality          Every push / PR                               │
+│    ruff · black · mypy   (informational — not yet a hard gate;       │
+│                            see Key Design Decisions)                 │
+│    Unit tests             26 tests — no cluster required             │
+│                                                                      │
+│  Job: cluster-tests     needs: quality                               │
+│    docker compose --profile storage up -d                            │
+│    wait-for-health.sh polling loop                                   │
+│    Smoke tests            3 tests — every push/PR                    │
+│    Functional tests       9+ tests — every push/PR                   │
+│    Extended suite         resilience/security/race/snapshot/         │
+│                            replication/performance — nightly cron    │
+│                            (02:00 UTC) or manual workflow_dispatch    │
+│    Container logs         uploaded on failure                        │
+│    Allure + JUnit results uploaded as workflow artifacts (14 days)   │
+│    docker compose down -v  (always, even on failure)                 │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+Run it yourself: **Actions tab → CI → Run workflow**, optionally checking "Also run resilience/security/race/snapshot/replication/performance".
+
+---
+
 ## Project Structure
 
 ```
@@ -375,6 +406,8 @@ Every stage that fails causes the pipeline to abort — except Stage 11, which a
 ├── pyproject.toml                     Build, deps, ruff/black/mypy config
 ├── pytest.ini                         Markers, timeout, addopts
 ├── Jenkinsfile                        11-stage declarative pipeline
+├── .github/workflows/
+│   └── ci.yml                         quality + unit → live-cluster smoke/functional → nightly extended suite
 │
 ├── storguard/                         Installable Python package
 │   ├── models.py                      ALL shared dataclasses + enums (source of truth)
@@ -476,6 +509,8 @@ Every stage that fails causes the pipeline to abort — except Stage 11, which a
 | Conftest AI hook with 30s timeout | AI log analysis on failure never blocks the suite — fails fast and moves on |
 | Standalone secondary MinIO, not a second erasure-coded cluster | Deliberately independent single-node site so replication lag, failover reads and RPO can be exercised against a real second endpoint without standing up two 4-node clusters |
 | Python `ReplicationWorker` instead of MinIO's native site replication | Native replication needs multi-cluster bootstrapping that doesn't fit a local lab; the worker makes lag and the recovery-point window explicit and testable |
+| Ruff/black/mypy report but don't block CI yet | The codebase carries pre-existing lint/format/type debt from before any CI ever ran it; failing the pipeline on day one for unrelated debt would hide real regressions. Flip to blocking once that debt is paid down. |
+| `bash scripts/*.sh` instead of `./scripts/*.sh` in CI | The shell scripts aren't committed with the executable bit set — invoking via `bash` sidesteps that instead of relying on a file permission surviving every checkout |
 
 ---
 
